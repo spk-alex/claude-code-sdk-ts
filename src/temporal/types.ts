@@ -35,6 +35,33 @@ export interface AgentSessionOptions {
   maxTokens?: number;
   /** Temperature for the model. */
   temperature?: number;
+  /**
+   * Natural-language instructions that control agent behavior — the
+   * programmatic equivalent of a CLAUDE.md / Agent.md file.
+   *
+   * These are prepended to the system prompt so they frame every
+   * interaction the agent has.  Use them to set coding conventions,
+   * restrict scope, require specific output formats, etc.
+   *
+   * @example
+   * ```ts
+   * options: {
+   *   agentInstructions: `
+   *     You are a senior TypeScript engineer.
+   *     - Always use strict types, never \`any\`.
+   *     - Write tests for every new function.
+   *     - Keep comments concise.
+   *   `,
+   * }
+   * ```
+   */
+  agentInstructions?: string;
+  /**
+   * Additional directories to include in the agent's context.
+   * Maps to the Claude CLI `--add-dir` flag so the agent can
+   * read CLAUDE.md or other instruction files from those paths.
+   */
+  addDirectories?: string[];
 }
 
 /** Input for a single Claude agent query activity. */
@@ -174,6 +201,16 @@ export interface AgentClientOptions {
 /** Convert AgentSessionOptions to ClaudeCodeOptions. */
 export function toClaudeCodeOptions(opts?: AgentSessionOptions): ClaudeCodeOptions {
   if (!opts) return {};
+
+  // When agentInstructions are provided, prepend them to the system prompt
+  // so they frame the agent's behaviour like a CLAUDE.md file would.
+  let systemPrompt = opts.systemPrompt;
+  if (opts.agentInstructions) {
+    systemPrompt = systemPrompt
+      ? `${opts.agentInstructions}\n\n${systemPrompt}`
+      : opts.agentInstructions;
+  }
+
   return {
     model: opts.model,
     allowedTools: opts.allowedTools,
@@ -182,10 +219,11 @@ export function toClaudeCodeOptions(opts?: AgentSessionOptions): ClaudeCodeOptio
     cwd: opts.cwd,
     env: opts.env,
     timeout: opts.timeout,
-    systemPrompt: opts.systemPrompt,
+    systemPrompt,
     context: opts.context,
     maxTokens: opts.maxTokens,
     temperature: opts.temperature,
+    addDirectories: opts.addDirectories,
   };
 }
 

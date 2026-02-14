@@ -37,6 +37,7 @@ vi.mock('../../fluent.js', () => {
     allowTools: vi.fn().mockReturnThis(),
     denyTools: vi.fn().mockReturnThis(),
     withEnv: vi.fn().mockReturnThis(),
+    addDirectory: vi.fn().mockReturnThis(),
     query: vi.fn().mockReturnValue(mockParser),
   };
 
@@ -111,6 +112,52 @@ describe('mergeAgentOptions', () => {
     expect(result.deniedTools).toEqual(['Bash']);
     expect(result.context).toEqual(['ctx1']);
   });
+
+  it('concatenates agentInstructions from base and overrides', async () => {
+    const base: AgentSessionOptions = {
+      agentInstructions: 'You are a senior TS engineer.',
+    };
+    const overrides: Partial<AgentSessionOptions> = {
+      agentInstructions: 'Focus on error handling.',
+    };
+
+    const result = await mergeAgentOptions(base, overrides);
+
+    expect(result.agentInstructions).toBe(
+      'You are a senior TS engineer.\n\nFocus on error handling.'
+    );
+  });
+
+  it('uses only base agentInstructions when overrides has none', async () => {
+    const base: AgentSessionOptions = {
+      agentInstructions: 'Always write tests.',
+    };
+
+    const result = await mergeAgentOptions(base, { model: 'opus' });
+
+    expect(result.agentInstructions).toBe('Always write tests.');
+  });
+
+  it('uses only override agentInstructions when base has none', async () => {
+    const base: AgentSessionOptions = { model: 'sonnet' };
+    const overrides: Partial<AgentSessionOptions> = {
+      agentInstructions: 'No any types.',
+    };
+
+    const result = await mergeAgentOptions(base, overrides);
+
+    expect(result.agentInstructions).toBe('No any types.');
+  });
+
+  it('preserves addDirectories from base when overrides has none', async () => {
+    const base: AgentSessionOptions = {
+      addDirectories: ['/repo/config'],
+    };
+
+    const result = await mergeAgentOptions(base, { model: 'opus' });
+
+    expect(result.addDirectories).toEqual(['/repo/config']);
+  });
 });
 
 describe('executeAgentQuery', () => {
@@ -175,6 +222,20 @@ describe('executeAgentQuery', () => {
     await executeAgentQuery({ prompt: 'test' });
 
     expect(heartbeat).toHaveBeenCalledWith('query-complete');
+  });
+
+  it('calls addDirectory when addDirectories is set', async () => {
+    const { executeAgentQuery } = await import('../activities.js');
+    const { __mockBuilder: mockBuilder } = await import('../../fluent.js') as any;
+
+    await executeAgentQuery({
+      prompt: 'test',
+      options: {
+        addDirectories: ['/repo/docs', '/repo/config'],
+      },
+    });
+
+    expect(mockBuilder.addDirectory).toHaveBeenCalledWith(['/repo/docs', '/repo/config']);
   });
 
   it('detects errors from system messages', async () => {

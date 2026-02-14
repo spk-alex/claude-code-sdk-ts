@@ -53,8 +53,8 @@ export async function executeAgentQuery(
     builder.denyTools(...opts.deniedTools);
   }
   if (opts.env) builder.withEnv(opts.env);
-  if (opts.systemPrompt) {
-    // systemPrompt is set via options, which is already in opts
+  if (opts.addDirectories && opts.addDirectories.length > 0) {
+    builder.addDirectory(opts.addDirectories);
   }
 
   const parser = builder.query(input.prompt);
@@ -141,5 +141,21 @@ export async function mergeAgentOptions(
     allowedTools: overrides.allowedTools ?? base.allowedTools,
     deniedTools: overrides.deniedTools ?? base.deniedTools,
     context: overrides.context ?? base.context,
+    addDirectories: overrides.addDirectories ?? base.addDirectories,
+    // For agentInstructions, concatenate both when step provides its own
+    // (step-level instructions come after workflow-level ones).
+    agentInstructions: mergeInstructions(base.agentInstructions, overrides.agentInstructions),
   };
+}
+
+/**
+ * Merge agent instructions: concatenate when both are provided,
+ * or return whichever one exists.
+ */
+function mergeInstructions(
+  base: string | undefined,
+  override: string | undefined
+): string | undefined {
+  if (base && override) return `${base}\n\n${override}`;
+  return override ?? base;
 }

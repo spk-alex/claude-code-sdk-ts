@@ -54,6 +54,39 @@ describe('toClaudeCodeOptions', () => {
     expect(result.cwd).toBeUndefined();
     expect(result.timeout).toBeUndefined();
   });
+
+  it('prepends agentInstructions to systemPrompt', () => {
+    const opts: AgentSessionOptions = {
+      agentInstructions: 'You are a senior TS engineer.',
+      systemPrompt: 'Be concise.',
+    };
+
+    const result = toClaudeCodeOptions(opts);
+
+    expect(result.systemPrompt).toBe(
+      'You are a senior TS engineer.\n\nBe concise.'
+    );
+  });
+
+  it('uses agentInstructions as systemPrompt when no systemPrompt set', () => {
+    const opts: AgentSessionOptions = {
+      agentInstructions: 'Always write tests.',
+    };
+
+    const result = toClaudeCodeOptions(opts);
+
+    expect(result.systemPrompt).toBe('Always write tests.');
+  });
+
+  it('passes addDirectories through to ClaudeCodeOptions', () => {
+    const opts: AgentSessionOptions = {
+      addDirectories: ['/repo/a', '/repo/b'],
+    };
+
+    const result = toClaudeCodeOptions(opts);
+
+    expect(result.addDirectories).toEqual(['/repo/a', '/repo/b']);
+  });
 });
 
 describe('toSerializableMessage', () => {
