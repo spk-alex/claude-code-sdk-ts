@@ -3,29 +3,52 @@ import { mergeAgentOptions } from '../activities.js';
 import type { AgentSessionOptions } from '../types.js';
 import type { AgentDefinition } from '../../types.js';
 
-// Mock the @temporalio/activity heartbeat since we're not running in a real
+// Mock the @temporalio/activity module since we're not running in a real
 // Temporal activity context.
+const mockCancellationSignal = new AbortController().signal;
 vi.mock('@temporalio/activity', () => ({
   heartbeat: vi.fn(),
+  Context: {
+    current: () => ({
+      cancellationSignal: mockCancellationSignal,
+    }),
+  },
 }));
 
 // Mock the fluent API so we don't spawn real Claude CLI processes.
 vi.mock('../../fluent.js', () => {
+  const defaultMessages = [
+    {
+      type: 'assistant',
+      content: [{ type: 'text', text: 'Mocked response' }],
+      session_id: 'mock-session-1',
+    },
+    {
+      type: 'result',
+      content: 'Done',
+      session_id: 'mock-session-1',
+      usage: { input_tokens: 10, output_tokens: 20 },
+      cost: { total_cost: 0.001 },
+    },
+  ];
+
+  // Shared message list that both stream() and asArray() use.
+  // Tests can override via __setMessages().
+  let currentMessages = defaultMessages;
+
   const mockParser = {
-    asArray: vi.fn().mockResolvedValue([
-      {
-        type: 'assistant',
-        content: [{ type: 'text', text: 'Mocked response' }],
-        session_id: 'mock-session-1',
-      },
-      {
-        type: 'result',
-        content: 'Done',
-        session_id: 'mock-session-1',
-        usage: { input_tokens: 10, output_tokens: 20 },
-        cost: { total_cost: 0.001 },
-      },
-    ]),
+    stream: vi.fn().mockImplementation(async (callback: (msg: any) => void) => {
+      for (const msg of currentMessages) {
+        callback(msg);
+      }
+    }),
+    asArray: vi.fn().mockImplementation(async () => currentMessages),
+    __setMessages: (msgs: any[]) => {
+      currentMessages = msgs;
+    },
+    __resetMessages: () => {
+      currentMessages = defaultMessages;
+    },
   };
 
   const mockBuilder = {
@@ -40,6 +63,7 @@ vi.mock('../../fluent.js', () => {
     withEnv: vi.fn().mockReturnThis(),
     addDirectory: vi.fn().mockReturnThis(),
     withAgents: vi.fn().mockReturnThis(),
+    withSignal: vi.fn().mockReturnThis(),
     query: vi.fn().mockReturnValue(mockParser),
   };
 
@@ -281,7 +305,7 @@ describe('executeAgentQuery', () => {
   it('detects errors from system messages', async () => {
     const { __mockParser: mockParser } = await import('../../fluent.js') as any;
 
-    mockParser.asArray.mockResolvedValueOnce([
+    mockParser.__setMessages([
       {
         type: 'system',
         subtype: 'error',
@@ -298,5 +322,17 @@ describe('executeAgentQuery', () => {
 
     expect(result.success).toBe(false);
     expect(result.errors).toContain('Rate limit exceeded');
+
+    // Reset for other tests
+    mockParser.__resetMessages();
+  });
+
+  it('calls withSignal with Temporal cancellation signal', async () => {
+    const { executeAgentQuery } = await import('../activities.js');
+    const { __mockBuilder: mockBuilder } = await import('../../fluent.js') as any;
+
+    await executeAgentQuery({ prompt: 'test' });
+
+    expect(mockBuilder.withSignal).toHaveBeenCalledWith(mockCancellationSignal);
   });
 });

@@ -9,7 +9,7 @@
  * the workflow via `proxyActivities`.
  */
 
-import { heartbeat } from '@temporalio/activity';
+import { heartbeat, Context } from '@temporalio/activity';
 import { claude } from '../fluent.js';
 import type {
   AgentQueryInput,
@@ -60,13 +60,28 @@ export async function executeAgentQuery(
     builder.withAgents(opts.agents);
   }
 
+  // Wire Temporal's activity cancellation signal to the Claude CLI subprocess.
+  // When the workflow cancels this activity (via CancellationScope), the
+  // AbortSignal fires and SubprocessAbortHandler kills the process immediately.
+  const cancellationSignal = Context.current().cancellationSignal;
+  builder.withSignal(cancellationSignal);
+
   const parser = builder.query(input.prompt);
 
-  // Collect messages while heartbeating.
-  const allMessages = await parser.asArray();
+  // Stream messages with periodic heartbeats so Temporal knows we're alive
+  // throughout long-running agent sessions (not just at the end).
+  let messageCount = 0;
+  await parser.stream(() => {
+    messageCount++;
+    if (messageCount % 5 === 0) {
+      heartbeat(`streaming-${messageCount}-messages`);
+    }
+  });
 
-  // Heartbeat after consuming all messages so Temporal knows we're alive.
   heartbeat('query-complete');
+
+  // asArray() returns already-collected messages after stream() consumed them.
+  const allMessages = await parser.asArray();
 
   const text = allMessages
     .filter((m) => m.type === 'assistant')
