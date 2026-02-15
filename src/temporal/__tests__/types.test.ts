@@ -55,29 +55,6 @@ describe('toClaudeCodeOptions', () => {
     expect(result.timeout).toBeUndefined();
   });
 
-  it('prepends agentInstructions to systemPrompt', () => {
-    const opts: AgentSessionOptions = {
-      agentInstructions: 'You are a senior TS engineer.',
-      systemPrompt: 'Be concise.',
-    };
-
-    const result = toClaudeCodeOptions(opts);
-
-    expect(result.systemPrompt).toBe(
-      'You are a senior TS engineer.\n\nBe concise.'
-    );
-  });
-
-  it('uses agentInstructions as systemPrompt when no systemPrompt set', () => {
-    const opts: AgentSessionOptions = {
-      agentInstructions: 'Always write tests.',
-    };
-
-    const result = toClaudeCodeOptions(opts);
-
-    expect(result.systemPrompt).toBe('Always write tests.');
-  });
-
   it('passes addDirectories through to ClaudeCodeOptions', () => {
     const opts: AgentSessionOptions = {
       addDirectories: ['/repo/a', '/repo/b'],
@@ -86,6 +63,51 @@ describe('toClaudeCodeOptions', () => {
     const result = toClaudeCodeOptions(opts);
 
     expect(result.addDirectories).toEqual(['/repo/a', '/repo/b']);
+  });
+
+  it('passes agents through to ClaudeCodeOptions', () => {
+    const opts: AgentSessionOptions = {
+      agents: {
+        'code-reviewer': {
+          description: 'Reviews code for quality',
+          prompt: 'You are a senior code reviewer.',
+          tools: ['Read', 'Grep', 'Glob'],
+          model: 'sonnet',
+        },
+      },
+    };
+
+    const result = toClaudeCodeOptions(opts);
+
+    expect(result.agents).toEqual({
+      'code-reviewer': {
+        description: 'Reviews code for quality',
+        prompt: 'You are a senior code reviewer.',
+        tools: ['Read', 'Grep', 'Glob'],
+        model: 'sonnet',
+      },
+    });
+  });
+
+  it('maps all fields including agents and addDirectories', () => {
+    const opts: AgentSessionOptions = {
+      model: 'sonnet',
+      cwd: '/project',
+      addDirectories: ['/shared'],
+      agents: {
+        helper: {
+          description: 'A helper agent',
+          prompt: 'Help the user.',
+        },
+      },
+    };
+
+    const result = toClaudeCodeOptions(opts);
+
+    expect(result.model).toBe('sonnet');
+    expect(result.cwd).toBe('/project');
+    expect(result.addDirectories).toEqual(['/shared']);
+    expect(result.agents?.helper?.description).toBe('A helper agent');
   });
 });
 

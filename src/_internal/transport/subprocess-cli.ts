@@ -176,6 +176,11 @@ export class SubprocessCLITransport {
       args.push('--add-dir', this.options.addDirectories.join(' '));
     }
 
+    // Handle subagent definitions (passed as JSON to --agents)
+    if (this.options.agents && Object.keys(this.options.agents).length > 0) {
+      args.push('--agents', JSON.stringify(this.options.agents));
+    }
+
     // Add --print flag (prompt will be sent via stdin)
     args.push('--print');
 

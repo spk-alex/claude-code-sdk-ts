@@ -39,6 +39,31 @@ describe('Workflow types', () => {
     expect(input.options?.cwd).toBe('/project');
   });
 
+  it('AgentWorkflowInput supports agents for native Claude Code subagents', () => {
+    const input: AgentWorkflowInput = {
+      prompt: 'Use the code-reviewer agent to review src/',
+      options: {
+        cwd: '/my/project',
+        agents: {
+          'code-reviewer': {
+            description: 'Reviews code for quality and security',
+            prompt: 'You are a senior code reviewer. Analyze code thoroughly.',
+            tools: ['Read', 'Grep', 'Glob'],
+            model: 'sonnet',
+          },
+          'test-writer': {
+            description: 'Writes tests for code',
+            prompt: 'You are an expert test writer.',
+            tools: ['Read', 'Write', 'Edit', 'Bash'],
+          },
+        },
+      },
+    };
+    expect(input.options?.agents).toBeDefined();
+    expect(Object.keys(input.options!.agents!)).toHaveLength(2);
+    expect(input.options!.agents!['code-reviewer']!.model).toBe('sonnet');
+  });
+
   it('AgentWorkflowInput supports taskQueue and workflowId', () => {
     const input: AgentWorkflowInput = {
       prompt: 'test',

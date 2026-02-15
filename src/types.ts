@@ -91,6 +91,33 @@ export interface MCPServer {
   env?: Record<string, string>;
 }
 
+/**
+ * Definition of a Claude Code subagent.
+ *
+ * Mirrors the YAML frontmatter in `.claude/agents/*.md` files.
+ * Passed to the CLI via `--agents` as JSON.
+ */
+export interface AgentDefinition {
+  /** When Claude should delegate to this agent. */
+  description: string;
+  /** System prompt / instructions for the agent (the markdown body). */
+  prompt: string;
+  /** Tools the agent is allowed to use. */
+  tools?: ToolName[];
+  /** Tools the agent is denied. */
+  disallowedTools?: ToolName[];
+  /** Model to use ("sonnet", "opus", "haiku", or "inherit"). */
+  model?: string;
+  /** Max agentic turns before stopping. */
+  maxTurns?: number;
+  /** Permission mode for the agent. */
+  permissionMode?: string;
+  /** Skills to preload into agent context. */
+  skills?: string[];
+  /** MCP servers available to this agent. */
+  mcpServers?: Record<string, MCPServer>;
+}
+
 // Import types needed for options
 import type { MCPServerPermissionConfig } from './types/permissions.js';
 
@@ -124,6 +151,26 @@ export interface ClaudeCodeOptions {
   sessionId?: string;
   // Additional directories to include in context
   addDirectories?: string[];
+  /**
+   * Subagent definitions passed to the CLI via `--agents`.
+   *
+   * Keys are agent names, values are their definitions.
+   * The CLI discovers these alongside any file-based agents
+   * in `.claude/agents/` and `~/.claude/agents/`.
+   *
+   * @example
+   * ```ts
+   * agents: {
+   *   'code-reviewer': {
+   *     description: 'Reviews code for quality and security',
+   *     prompt: 'You are a senior code reviewer...',
+   *     tools: ['Read', 'Grep', 'Glob'],
+   *     model: 'sonnet',
+   *   },
+   * }
+   * ```
+   */
+  agents?: Record<string, AgentDefinition>;
 }
 
 // Additional types for internal use - based on actual Claude Code CLI output

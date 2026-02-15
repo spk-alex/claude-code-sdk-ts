@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mergeAgentOptions } from '../activities.js';
 import type { AgentSessionOptions } from '../types.js';
+import type { AgentDefinition } from '../../types.js';
 
 // Mock the @temporalio/activity heartbeat since we're not running in a real
 // Temporal activity context.
@@ -38,6 +39,7 @@ vi.mock('../../fluent.js', () => {
     denyTools: vi.fn().mockReturnThis(),
     withEnv: vi.fn().mockReturnThis(),
     addDirectory: vi.fn().mockReturnThis(),
+    withAgents: vi.fn().mockReturnThis(),
     query: vi.fn().mockReturnValue(mockParser),
   };
 
@@ -113,40 +115,58 @@ describe('mergeAgentOptions', () => {
     expect(result.context).toEqual(['ctx1']);
   });
 
-  it('concatenates agentInstructions from base and overrides', async () => {
+  it('merges agents from base and overrides (overrides win by name)', async () => {
     const base: AgentSessionOptions = {
-      agentInstructions: 'You are a senior TS engineer.',
+      agents: {
+        reviewer: {
+          description: 'Base reviewer',
+          prompt: 'Review code',
+          tools: ['Read'],
+        },
+        debugger: {
+          description: 'Debugger agent',
+          prompt: 'Debug issues',
+        },
+      },
     };
     const overrides: Partial<AgentSessionOptions> = {
-      agentInstructions: 'Focus on error handling.',
+      agents: {
+        reviewer: {
+          description: 'Override reviewer',
+          prompt: 'Review code thoroughly',
+          tools: ['Read', 'Grep'],
+        },
+      },
     };
 
     const result = await mergeAgentOptions(base, overrides);
 
-    expect(result.agentInstructions).toBe(
-      'You are a senior TS engineer.\n\nFocus on error handling.'
-    );
+    // Override wins for 'reviewer'
+    expect(result.agents?.reviewer?.description).toBe('Override reviewer');
+    expect(result.agents?.reviewer?.tools).toEqual(['Read', 'Grep']);
+    // Base preserved for 'debugger'
+    expect(result.agents?.debugger?.description).toBe('Debugger agent');
   });
 
-  it('uses only base agentInstructions when overrides has none', async () => {
+  it('preserves base agents when overrides has none', async () => {
     const base: AgentSessionOptions = {
-      agentInstructions: 'Always write tests.',
+      agents: {
+        helper: { description: 'Helper', prompt: 'Help' },
+      },
     };
 
     const result = await mergeAgentOptions(base, { model: 'opus' });
 
-    expect(result.agentInstructions).toBe('Always write tests.');
+    expect(result.agents?.helper?.description).toBe('Helper');
   });
 
-  it('uses only override agentInstructions when base has none', async () => {
-    const base: AgentSessionOptions = { model: 'sonnet' };
-    const overrides: Partial<AgentSessionOptions> = {
-      agentInstructions: 'No any types.',
-    };
+  it('returns undefined agents when neither base nor overrides has them', async () => {
+    const result = await mergeAgentOptions(
+      { model: 'sonnet' },
+      { model: 'opus' }
+    );
 
-    const result = await mergeAgentOptions(base, overrides);
-
-    expect(result.agentInstructions).toBe('No any types.');
+    expect(result.agents).toBeUndefined();
   });
 
   it('preserves addDirectories from base when overrides has none', async () => {
@@ -222,6 +242,26 @@ describe('executeAgentQuery', () => {
     await executeAgentQuery({ prompt: 'test' });
 
     expect(heartbeat).toHaveBeenCalledWith('query-complete');
+  });
+
+  it('calls withAgents when agents are defined', async () => {
+    const { executeAgentQuery } = await import('../activities.js');
+    const { __mockBuilder: mockBuilder } = await import('../../fluent.js') as any;
+
+    const agents: Record<string, AgentDefinition> = {
+      reviewer: {
+        description: 'Code reviewer',
+        prompt: 'Review code for quality',
+        tools: ['Read', 'Grep'],
+      },
+    };
+
+    await executeAgentQuery({
+      prompt: 'Use the reviewer agent',
+      options: { agents },
+    });
+
+    expect(mockBuilder.withAgents).toHaveBeenCalledWith(agents);
   });
 
   it('calls addDirectory when addDirectories is set', async () => {

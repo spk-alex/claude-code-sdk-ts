@@ -56,6 +56,9 @@ export async function executeAgentQuery(
   if (opts.addDirectories && opts.addDirectories.length > 0) {
     builder.addDirectory(opts.addDirectories);
   }
+  if (opts.agents && Object.keys(opts.agents).length > 0) {
+    builder.withAgents(opts.agents);
+  }
 
   const parser = builder.query(input.prompt);
 
@@ -142,20 +145,10 @@ export async function mergeAgentOptions(
     deniedTools: overrides.deniedTools ?? base.deniedTools,
     context: overrides.context ?? base.context,
     addDirectories: overrides.addDirectories ?? base.addDirectories,
-    // For agentInstructions, concatenate both when step provides its own
-    // (step-level instructions come after workflow-level ones).
-    agentInstructions: mergeInstructions(base.agentInstructions, overrides.agentInstructions),
+    // Merge agent definitions: step-level agents override workflow-level
+    // agents with the same name, new names are added.
+    agents: (base.agents || overrides.agents)
+      ? { ...base.agents, ...overrides.agents }
+      : undefined,
   };
-}
-
-/**
- * Merge agent instructions: concatenate when both are provided,
- * or return whichever one exists.
- */
-function mergeInstructions(
-  base: string | undefined,
-  override: string | undefined
-): string | undefined {
-  if (base && override) return `${base}\n\n${override}`;
-  return override ?? base;
 }

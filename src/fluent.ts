@@ -1,14 +1,15 @@
 import { query as baseQuery } from './index.js';
-import type { 
-  ClaudeCodeOptions, 
-  Message, 
-  ToolName, 
+import type {
+  ClaudeCodeOptions,
+  Message,
+  ToolName,
   PermissionMode,
   MCPServerPermission,
   MCPServerPermissionConfig,
   MCPConfigSchema,
   RoleDefinition,
-  ContentBlock
+  ContentBlock,
+  AgentDefinition
 } from './types.js';
 import { ResponseParser } from './parser.js';
 import { Logger } from './logger.js';
@@ -172,6 +173,31 @@ export class QueryBuilder {
     }
     const dirsToAdd = Array.isArray(directories) ? directories : [directories];
     this.options.addDirectories.push(...dirsToAdd);
+    return this;
+  }
+
+  /**
+   * Define subagents available during the session.
+   *
+   * These are passed to the Claude CLI via `--agents` and work
+   * alongside any file-based agents in `.claude/agents/`.
+   *
+   * @example
+   * ```ts
+   * claude()
+   *   .withAgents({
+   *     'code-reviewer': {
+   *       description: 'Reviews code for quality and security',
+   *       prompt: 'You are a senior code reviewer...',
+   *       tools: ['Read', 'Grep', 'Glob'],
+   *       model: 'sonnet',
+   *     },
+   *   })
+   *   .query('Review the auth module')
+   * ```
+   */
+  withAgents(agents: Record<string, AgentDefinition>): this {
+    this.options.agents = { ...this.options.agents, ...agents };
     return this;
   }
 

@@ -5,7 +5,7 @@
  * Claude agent sessions as durable Temporal workflows.
  */
 
-import type { ClaudeCodeOptions, Message, ToolName, PermissionMode } from '../types.js';
+import type { ClaudeCodeOptions, Message, ToolName, PermissionMode, AgentDefinition } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Activity input / output
@@ -36,32 +36,33 @@ export interface AgentSessionOptions {
   /** Temperature for the model. */
   temperature?: number;
   /**
-   * Natural-language instructions that control agent behavior — the
-   * programmatic equivalent of a CLAUDE.md / Agent.md file.
+   * Additional directories to include in the agent's context.
+   * Maps to the Claude CLI `--add-dir` flag so the agent can
+   * discover CLAUDE.md and other project files from those paths.
+   */
+  addDirectories?: string[];
+  /**
+   * Subagent definitions passed to the CLI via `--agents`.
    *
-   * These are prepended to the system prompt so they frame every
-   * interaction the agent has.  Use them to set coding conventions,
-   * restrict scope, require specific output formats, etc.
+   * These work alongside any file-based agents in `.claude/agents/`
+   * and `~/.claude/agents/` that the CLI auto-discovers from `cwd`.
    *
    * @example
    * ```ts
    * options: {
-   *   agentInstructions: `
-   *     You are a senior TypeScript engineer.
-   *     - Always use strict types, never \`any\`.
-   *     - Write tests for every new function.
-   *     - Keep comments concise.
-   *   `,
+   *   cwd: '/my/project', // CLI auto-discovers .claude/agents/ here
+   *   agents: {
+   *     'code-reviewer': {
+   *       description: 'Reviews code for quality and security',
+   *       prompt: 'You are a senior code reviewer...',
+   *       tools: ['Read', 'Grep', 'Glob'],
+   *       model: 'sonnet',
+   *     },
+   *   },
    * }
    * ```
    */
-  agentInstructions?: string;
-  /**
-   * Additional directories to include in the agent's context.
-   * Maps to the Claude CLI `--add-dir` flag so the agent can
-   * read CLAUDE.md or other instruction files from those paths.
-   */
-  addDirectories?: string[];
+  agents?: Record<string, AgentDefinition>;
 }
 
 /** Input for a single Claude agent query activity. */
@@ -202,15 +203,6 @@ export interface AgentClientOptions {
 export function toClaudeCodeOptions(opts?: AgentSessionOptions): ClaudeCodeOptions {
   if (!opts) return {};
 
-  // When agentInstructions are provided, prepend them to the system prompt
-  // so they frame the agent's behaviour like a CLAUDE.md file would.
-  let systemPrompt = opts.systemPrompt;
-  if (opts.agentInstructions) {
-    systemPrompt = systemPrompt
-      ? `${opts.agentInstructions}\n\n${systemPrompt}`
-      : opts.agentInstructions;
-  }
-
   return {
     model: opts.model,
     allowedTools: opts.allowedTools,
@@ -219,11 +211,12 @@ export function toClaudeCodeOptions(opts?: AgentSessionOptions): ClaudeCodeOptio
     cwd: opts.cwd,
     env: opts.env,
     timeout: opts.timeout,
-    systemPrompt,
+    systemPrompt: opts.systemPrompt,
     context: opts.context,
     maxTokens: opts.maxTokens,
     temperature: opts.temperature,
     addDirectories: opts.addDirectories,
+    agents: opts.agents,
   };
 }
 
