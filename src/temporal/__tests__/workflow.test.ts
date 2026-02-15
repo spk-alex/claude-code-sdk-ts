@@ -135,6 +135,92 @@ describe('Workflow types', () => {
     expect(output.success).toBe(false);
     expect(output.stepResults[0]!.result.errors).toContain('Rate limit exceeded');
   });
+
+  it('AgentWorkflowOutput records aborted steps', () => {
+    const output: AgentWorkflowOutput = {
+      stepResults: [
+        {
+          stepIndex: 0,
+          prompt: 'Long running step',
+          result: {
+            text: '',
+            sessionId: null,
+            messages: [],
+            success: false,
+            errors: ['Step aborted'],
+          },
+        },
+        {
+          stepIndex: 1,
+          prompt: 'Priority step inserted after abort',
+          result: {
+            text: 'Priority response',
+            sessionId: 'sess-1',
+            messages: [],
+            success: true,
+            errors: [],
+          },
+        },
+      ],
+      sessionId: 'sess-1',
+      success: false,
+      fullText: '\n\nPriority response',
+    };
+
+    expect(output.stepResults).toHaveLength(2);
+    expect(output.stepResults[0]!.result.errors).toContain('Step aborted');
+    expect(output.stepResults[0]!.result.success).toBe(false);
+    expect(output.stepResults[1]!.result.success).toBe(true);
+    expect(output.success).toBe(false); // overall false because step 0 failed
+  });
+
+  it('AgentWorkflowOutput reflects queue replacement', () => {
+    const output: AgentWorkflowOutput = {
+      stepResults: [
+        {
+          stepIndex: 0,
+          prompt: 'Original step (aborted)',
+          result: {
+            text: '',
+            sessionId: null,
+            messages: [],
+            success: false,
+            errors: ['Step aborted'],
+          },
+        },
+        {
+          stepIndex: 1,
+          prompt: 'Replacement step A',
+          result: {
+            text: 'Result A',
+            sessionId: 'sess-2',
+            messages: [],
+            success: true,
+            errors: [],
+          },
+        },
+        {
+          stepIndex: 2,
+          prompt: 'Replacement step B',
+          result: {
+            text: 'Result B',
+            sessionId: 'sess-2',
+            messages: [],
+            success: true,
+            errors: [],
+          },
+        },
+      ],
+      sessionId: 'sess-2',
+      success: false,
+      fullText: '\n\nResult A\n\nResult B',
+    };
+
+    expect(output.stepResults).toHaveLength(3);
+    expect(output.stepResults[0]!.result.errors).toContain('Step aborted');
+    expect(output.stepResults[1]!.prompt).toBe('Replacement step A');
+    expect(output.stepResults[2]!.prompt).toBe('Replacement step B');
+  });
 });
 
 describe('Workflow module exports', () => {

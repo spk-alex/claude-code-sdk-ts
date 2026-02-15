@@ -33,6 +33,8 @@ import {
   claudeAgentWorkflow,
   addStepSignal,
   cancelSignal,
+  abortAndInsertSignal,
+  replaceQueueSignal,
   getProgressQuery,
   isRunningQuery,
 } from './workflows.js';
@@ -150,9 +152,32 @@ export class AgentWorkflowHandle {
     await this.handle.signal(addStepSignal, { prompt, options });
   }
 
-  /** Request the workflow to cancel gracefully after the current step. */
+  /** Request the workflow to cancel gracefully (aborts the current step). */
   async cancel(): Promise<void> {
     await this.handle.signal(cancelSignal);
+  }
+
+  /**
+   * Abort the currently running step and insert a new step at the front
+   * of the queue. The aborted step is recorded with `success: false` and
+   * the new step begins immediately.
+   */
+  async abortAndInsert(
+    prompt: string,
+    options?: Partial<AgentSessionOptions>
+  ): Promise<void> {
+    await this.handle.signal(abortAndInsertSignal, { prompt, options });
+  }
+
+  /**
+   * Abort the currently running step and replace the entire pending queue.
+   * All previously queued steps are discarded and the provided steps
+   * become the new execution plan.
+   */
+  async replaceQueue(
+    steps: Array<{ prompt: string; options?: Partial<AgentSessionOptions> }>
+  ): Promise<void> {
+    await this.handle.signal(replaceQueueSignal, { steps });
   }
 
   /** Terminate the workflow immediately (last resort). */

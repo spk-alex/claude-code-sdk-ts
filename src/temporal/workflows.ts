@@ -13,6 +13,8 @@ import {
   defineQuery,
   setHandler,
   condition,
+  CancellationScope,
+  isCancellation,
 } from '@temporalio/workflow';
 
 import type * as activitiesModule from './activities.js';
@@ -56,6 +58,27 @@ export const addStepSignal = defineSignal<[{ prompt: string; options?: Partial<A
 
 /** Signal: request the workflow to cancel gracefully after the current step. */
 export const cancelSignal = defineSignal('cancel');
+
+/**
+ * Signal: abort the current step and insert a new step at the front of the queue.
+ *
+ * The currently running activity is cancelled immediately, and the provided
+ * step becomes the next one to execute. Any previously queued steps remain
+ * behind it.
+ */
+export const abortAndInsertSignal = defineSignal<[{ prompt: string; options?: Partial<AgentSessionOptions> }]>(
+  'abortAndInsert'
+);
+
+/**
+ * Signal: abort the current step and replace the entire pending queue.
+ *
+ * The currently running activity is cancelled, the pending queue is cleared,
+ * and the provided steps become the new queue.
+ */
+export const replaceQueueSignal = defineSignal<[{ steps: Array<{ prompt: string; options?: Partial<AgentSessionOptions> }> }]>(
+  'replaceQueue'
+);
 
 /** Query: get the current list of completed step results so far. */
 export const getProgressQuery = defineQuery<AgentWorkflowStepResult[]>('getProgress');
@@ -109,6 +132,10 @@ export async function claudeAgentWorkflow(
   let running = true;
   let sessionId: string | null = null;
 
+  // Reference to the current CancellationScope so abort signals can cancel
+  // the in-flight activity immediately.
+  let currentScope: CancellationScope | null = null;
+
   // --- Register handlers ---
 
   setHandler(addStepSignal, (step) => {
@@ -117,6 +144,28 @@ export async function claudeAgentWorkflow(
 
   setHandler(cancelSignal, () => {
     cancelled = true;
+    if (currentScope) {
+      currentScope.cancel();
+    }
+  });
+
+  setHandler(abortAndInsertSignal, (step) => {
+    // Insert the new step at the front of the queue so it executes next.
+    pendingSteps.unshift(step);
+    if (currentScope) {
+      currentScope.cancel();
+    }
+  });
+
+  setHandler(replaceQueueSignal, ({ steps }) => {
+    // Clear the queue and replace with the new steps.
+    pendingSteps.length = 0;
+    for (const s of steps) {
+      pendingSteps.push(s);
+    }
+    if (currentScope) {
+      currentScope.cancel();
+    }
   });
 
   setHandler(getProgressQuery, () => [...stepResults]);
@@ -168,18 +217,50 @@ export async function claudeAgentWorkflow(
       options: mergedOptions,
     };
 
-    const result: AgentQueryResult = await executeAgentQuery(queryInput);
+    // Wrap the activity in a CancellationScope so abort/replace signals
+    // can cancel it mid-execution.
+    const scope = new CancellationScope({ cancellable: true });
+    currentScope = scope;
 
-    // Carry session forward.
-    if (result.sessionId) {
-      sessionId = result.sessionId;
+    let stepResult: AgentQueryResult | null = null;
+
+    try {
+      stepResult = await scope.run(() => executeAgentQuery(queryInput));
+    } catch (e) {
+      if (!isCancellation(e)) {
+        throw e;
+      }
+      // Activity was cancelled by an abort/replace/cancel signal.
+      // stepResult remains null — handled below.
+    } finally {
+      currentScope = null;
     }
 
-    stepResults.push({
-      stepIndex,
-      prompt: step.prompt,
-      result,
-    });
+    if (stepResult) {
+      // Normal completion — carry session forward.
+      if (stepResult.sessionId) {
+        sessionId = stepResult.sessionId;
+      }
+
+      stepResults.push({
+        stepIndex,
+        prompt: step.prompt,
+        result: stepResult,
+      });
+    } else {
+      // Step was aborted.
+      stepResults.push({
+        stepIndex,
+        prompt: step.prompt,
+        result: {
+          text: '',
+          sessionId,
+          messages: [],
+          success: false,
+          errors: ['Step aborted'],
+        },
+      });
+    }
 
     stepIndex++;
   }

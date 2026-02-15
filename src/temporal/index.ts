@@ -64,6 +64,8 @@ export {
   claudeAgentWorkflow,
   addStepSignal,
   cancelSignal,
+  abortAndInsertSignal,
+  replaceQueueSignal,
   getProgressQuery,
   isRunningQuery,
 } from './workflows.js';
