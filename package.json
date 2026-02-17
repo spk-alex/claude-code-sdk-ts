@@ -16,6 +16,16 @@
       "types": "./dist/temporal/index.d.ts",
       "import": "./dist/temporal/index.js",
       "require": "./dist/temporal/index.cjs"
+    },
+    "./agent-host": {
+      "types": "./dist/agent-host/index.d.ts",
+      "import": "./dist/agent-host/index.js",
+      "require": "./dist/agent-host/index.cjs"
+    },
+    "./orchestrator": {
+      "types": "./dist/orchestrator/index.d.ts",
+      "import": "./dist/orchestrator/index.js",
+      "require": "./dist/orchestrator/index.cjs"
     }
   },
   "files": [
@@ -42,7 +52,12 @@
     "sdk",
     "typescript",
     "temporal",
-    "workflow"
+    "workflow",
+    "a2a",
+    "agent-to-agent",
+    "docker",
+    "cloudflare-workers",
+    "orchestrator"
   ],
   "author": "Daniel King & Claude",
   "license": "MIT",
@@ -55,20 +70,40 @@
     "which": "^4.0.0"
   },
   "peerDependencies": {
+    "@a2a-js/sdk": "^0.3.0",
     "@temporalio/activity": "^1.14.0",
     "@temporalio/client": "^1.14.0",
     "@temporalio/common": "^1.14.0",
     "@temporalio/worker": "^1.14.0",
-    "@temporalio/workflow": "^1.14.0"
+    "@temporalio/workflow": "^1.14.0",
+    "express": "^4.18.0 || ^5.0.0"
   },
   "peerDependenciesMeta": {
-    "@temporalio/activity": { "optional": true },
-    "@temporalio/client": { "optional": true },
-    "@temporalio/common": { "optional": true },
-    "@temporalio/worker": { "optional": true },
-    "@temporalio/workflow": { "optional": true }
+    "@temporalio/activity": {
+      "optional": true
+    },
+    "@temporalio/client": {
+      "optional": true
+    },
+    "@temporalio/common": {
+      "optional": true
+    },
+    "@temporalio/worker": {
+      "optional": true
+    },
+    "@temporalio/workflow": {
+      "optional": true
+    },
+    "@a2a-js/sdk": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@a2a-js/sdk": "^0.3.10",
+    "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.10.0",
     "@types/which": "^3.0.3",
@@ -76,6 +111,7 @@
     "@typescript-eslint/parser": "^6.13.0",
     "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^8.54.0",
+    "express": "^5.2.1",
     "prettier": "^3.1.0",
     "tsup": "^8.0.1",
     "typescript": "^5.3.0",
